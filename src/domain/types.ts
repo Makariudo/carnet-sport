@@ -24,7 +24,10 @@ export interface Block {
 
 /** Un exercice de PPG dans une séance ou un programme. */
 export interface PpgItem {
+  /** Nom affiché, modifiable (« Demi-squat chargé », « Fentes marchées »…). */
   exercise: string
+  /** Exercice de la bibliothèque d'origine, pour le schéma et les consignes. */
+  exerciseId?: string
   sets: number
   /** Répétitions par série (exercice compté)… */
   reps?: number

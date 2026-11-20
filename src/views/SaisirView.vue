@@ -14,6 +14,8 @@ import { fmtClock, fmtDistance, fmtDuration, fmtKm, fmtPace, fmtSpeed, fmtSwimPa
 import { todayISO, shortDate } from '../lib/dates'
 import { SPORT_ICON, sportTone } from '../lib/sports'
 import { useToast } from '../composables/useToast'
+import { PLANNING_ENABLED } from '../lib/features'
+import { blocksLabel, sameRecoveries } from '../domain/compare'
 
 const route = useRoute()
 const router = useRouter()
@@ -79,13 +81,14 @@ const derived = computed(() => {
 
 /** Les dernières séances différentes de ce sport, à refaire en un geste. */
 const recents = computed(() => {
-  const seen = new Set<string>()
+  const seen: { key: string; s: Session }[] = []
   const out: Session[] = []
   for (const s of [...data.sessions].sort(byDateDesc)) {
     if (s.sport !== sport.value) continue
     const key = `${s.kind}|${sessionSignature(s)}|${Math.round(sessionDistance(s) / 1000)}|${s.programId ?? ''}`
-    if (seen.has(key)) continue
-    seen.add(key)
+    // Même forme mais récup différente (8×1000 r50" / r1'30) : deux séances distinctes à proposer.
+    if (seen.some((x) => x.key === key && sameRecoveries(x.s, s))) continue
+    seen.push({ key, s })
     out.push(s)
     if (out.length === 4) break
   }
@@ -93,14 +96,14 @@ const recents = computed(() => {
 })
 const recentLabel = (s: Session) => {
   if (s.sport === 'ppg') return data.programs.find((p) => p.id === s.programId)?.name ?? s.kind ?? 'PPG'
-  const sig = sessionSignature(s)
+  const sig = blocksLabel(s)
   if (sig) return sig
   const d = sessionDistance(s)
   return [s.kind, d ? (d < 1000 ? fmtDistance(d) : `${fmtKm(d)} km`) : null].filter(Boolean).join(' · ')
 }
 
 /** Ce qui est prévu aujourd'hui et pas encore fait. */
-const todayPlan = computed(() => data.plan.filter((p) => p.date === todayISO() && !p.done))
+const todayPlan = computed(() => (PLANNING_ENABLED ? data.plan.filter((p) => p.date === todayISO() && !p.done) : []))
 
 function fill(s: Session, keepDate = false) {
   sport.value = s.sport

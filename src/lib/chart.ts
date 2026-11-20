@@ -1,3 +1,13 @@
+/** Une courbe d'un graphique à plusieurs séries. */
+export interface Series {
+  label: string
+  /** Couleur CSS (variable de thème). */
+  color: string
+  values: number[]
+  /** Axe utilisé : gauche par défaut, droite pour la seconde unité. */
+  axis?: 'left' | 'right'
+}
+
 function niceStep(range: number, n: number): number {
   const raw = range / n
   const p = Math.pow(10, Math.floor(Math.log10(raw)))

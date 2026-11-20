@@ -28,8 +28,8 @@ export function speedLabel(s: Session): string | null {
   return null
 }
 
-/** Filtre des stats : un sport, ou le vélo avec le home trainer. */
-export type StatFilter = 'course' | 'velo' | 'natation' | 'tout'
+/** Filtre des stats : un sport (le vélo avec le home trainer), la PPG, ou tout sauf la PPG. */
+export type StatFilter = 'course' | 'velo' | 'natation' | 'ppg' | 'tout'
 export function matches(s: Session, f: StatFilter): boolean {
   if (f === 'tout') return s.sport !== 'ppg'
   if (f === 'velo') return s.sport === 'velo' || s.sport === 'home-trainer'

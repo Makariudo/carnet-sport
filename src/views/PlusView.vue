@@ -3,6 +3,7 @@ import { computed } from 'vue'
 import { Calculator, CalendarDays, ChevronRight, Dumbbell, LogOut, RotateCcw } from 'lucide-vue-next'
 import { auth, data, isCloud, sport } from '../stores/sport'
 import { todayISO, weekStart, addDays } from '../lib/dates'
+import { PLANNING_ENABLED } from '../lib/features'
 
 const mon = weekStart(todayISO())
 const weekPlan = computed(() => data.plan.filter((p) => p.date >= mon && p.date <= addDays(mon, 6)))
@@ -12,7 +13,7 @@ const done = computed(() => weekPlan.value.filter((p) => p.done).length)
 <template>
   <section class="view">
     <ul class="list card tight">
-      <li>
+      <li v-if="PLANNING_ENABLED">
         <RouterLink to="/planning" class="row">
           <span class="icon" style="--tone: var(--acc)"><CalendarDays :size="19" /></span>
           <span class="lab"><b>Planning de la semaine</b><small>{{ weekPlan.length ? `${done}/${weekPlan.length} séances faites` : 'Rien de prévu cette semaine' }}</small></span>

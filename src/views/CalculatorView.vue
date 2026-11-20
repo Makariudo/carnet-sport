@@ -124,6 +124,42 @@ function bg(pace: number, col: Col): string {
   return intensityColor(paceIntensity(pace, vma.value, col.zone))
 }
 
+/* Lignes surlignées en jaune (clic ou Entrée sur l'allure) ; plusieurs possibles. */
+const marked = ref<number[]>([])
+const isMarked = (pace: number) => marked.value.includes(pace)
+function toggleRow(pace: number) {
+  marked.value = isMarked(pace) ? marked.value.filter((p) => p !== pace) : [...marked.value, pace]
+}
+
+/** Fond d'une cellule : le jaune du surlignage l'emporte sur la couleur de zone. */
+const cellBg = (pace: number, col: Col) => (isMarked(pace) ? '' : bg(pace, col))
+
+/* Impression : seul le bloc .calc-print est imprimé, en paysage, avec la configuration en tête. */
+const modeLabel = computed(() => {
+  const m = MODES.find((x) => x.value === mode.value)!.label
+  return mode.value === 'intermediate' && interDistance.value ? `${m} : ${interDistance.value.label}` : m
+})
+const printSummary = computed(() => [
+  vma.value > 0 ? `VMA ${vma.value.toLocaleString('fr-FR')} km/h (${vmaPaceLabel.value})` : '',
+  `Allures ${slowMin.value}'${pad(slowSec.value)} à ${fastMin.value}'${pad(fastSec.value)}, pas de ${step.value} s`,
+  `Distances : ${modeLabel.value}`,
+].filter(Boolean).join(' · '))
+
+function printTable() {
+  const root = document.documentElement
+  const page = document.createElement('style')
+  page.textContent = '@page { size: landscape; margin: 10mm }'
+  document.head.appendChild(page)
+  root.classList.add('printing-calc')
+  const cleanup = () => {
+    root.classList.remove('printing-calc')
+    page.remove()
+    window.removeEventListener('afterprint', cleanup)
+  }
+  window.addEventListener('afterprint', cleanup)
+  window.print()
+}
+
 const pctLabel = (pace: number) => {
   const p = percentVma(pace, vma.value)
   return Number.isFinite(p) ? `${Math.round(p)} %` : ''
@@ -217,15 +253,26 @@ const pctLabel = (pace: number) => {
         </select>
       </div>
 
-      <div class="chips">
-        <button type="button" class="chip" :aria-pressed="colored" @click="colored = !colored">Couleurs selon la VMA</button>
-      </div>
-      <p v-if="colored && !(vma > 0)" class="note">Renseigne ta VMA pour colorer le tableau.</p>
-      <p v-else-if="colored && mode === 'fraction'" class="note">Pas de couleur en fractionnés : une zone de %VMA n'a de sens que sur une distance de course.</p>
-      <p v-else-if="colored" class="note">Vert : allure facile pour la distance, rouge : au bord haut de la zone. Sans couleur : hors zone.</p>
     </div>
 
-    <div v-if="paces.length" class="tbl-wrap">
+    <div v-if="paces.length" class="tools">
+      <label class="opt">
+        <input type="checkbox" v-model="colored" />
+        Couleurs VMA
+      </label>
+      <span class="hint">Touche une ligne pour la surligner</span>
+      <button type="button" class="print" @click="printTable">Imprimer</button>
+    </div>
+    <p v-if="paces.length && colored && !(vma > 0)" class="note small">Renseigne ta VMA pour colorer le tableau.</p>
+    <p v-else-if="paces.length && colored && mode === 'fraction'" class="note small">Pas de couleur en fractionnés : une zone de %VMA n'a de sens que sur une distance de course.</p>
+    <p v-else-if="paces.length && colored" class="note small">Vert : allure facile pour la distance, rouge : bord haut de la zone. Sans couleur : hors zone.</p>
+
+    <div v-if="paces.length" class="calc-print">
+      <div class="print-head">
+        <b>Calculateur d'allure</b>
+        <span>{{ printSummary }}</span>
+      </div>
+      <div class="tbl-wrap">
       <table>
         <thead>
           <tr>
@@ -238,17 +285,20 @@ const pctLabel = (pace: number) => {
           </tr>
         </thead>
         <tbody>
-          <tr v-for="p in paces" :key="p">
+          <tr v-for="p in paces" :key="p" :class="{ hl: isMarked(p) }" @click="toggleRow(p)">
             <td class="stick" :class="{ sel: selected === 0 }">
-              <b>{{ fmtClock(p) }}</b>
-              <small v-if="pctLabel(p)">{{ pctLabel(p) }}</small>
+              <button type="button" class="rowbtn" :aria-pressed="isMarked(p)" :aria-label="`Surligner l'allure ${fmtClock(p)}`">
+                <b>{{ fmtClock(p) }}</b>
+                <small v-if="pctLabel(p)">{{ pctLabel(p) }}</small>
+              </button>
             </td>
-            <td v-for="(c, i) in cols" :key="c.label" :class="{ sel: selected === i + 1 }" :style="{ background: bg(p, c) }">
+            <td v-for="(c, i) in cols" :key="c.label" :class="{ sel: selected === i + 1 }" :style="{ background: cellBg(p, c) }">
               {{ fmtRaceTime(timeAtPace(c.meters, p)) }}
             </td>
           </tr>
         </tbody>
       </table>
+      </div>
     </div>
     <p v-else class="empty">Plage d'allures invalide : l'allure la plus lente doit être au moins aussi lente que la plus rapide, entre 2'00 et 9'00.</p>
   </section>
@@ -277,4 +327,44 @@ td.stick small { color: var(--muted); font-size: 11px }
 .sel { box-shadow: inset 0 0 0 999px color-mix(in srgb, var(--acc) 14%, transparent) }
 .stick.sel { box-shadow: inset 0 0 0 999px color-mix(in srgb, var(--acc) 14%, transparent), 1px 0 0 var(--line) }
 th.sel .hd { color: var(--acc) }
+
+/* Ligne surlignée : jaune opaque (la colonne figée doit masquer ce qui défile dessous). */
+tbody tr { cursor: pointer }
+.rowbtn { all: unset; display: block; cursor: pointer }
+.rowbtn:focus-visible { outline: 2px solid var(--acc); outline-offset: 2px }
+tr.hl td, tr.hl td.stick { background: color-mix(in srgb, #FACC15 50%, var(--surface)) }
+tr.hl td.stick small { color: inherit; opacity: .75 }
+
+/* Outils discrets au-dessus du tableau. */
+.tools { display: flex; align-items: center; gap: 12px; margin: 4px 2px 8px; font-size: 13px; color: var(--muted) }
+.opt { display: inline-flex; align-items: center; gap: 6px; cursor: pointer }
+.opt input { margin: 0; width: 14px; height: 14px; accent-color: var(--muted) }
+.hint { flex: 1; text-align: center; font-size: 12px; opacity: .8 }
+.print { all: unset; cursor: pointer; font-size: 13px; color: var(--muted); text-decoration: underline; text-underline-offset: 3px }
+.print:focus-visible, .opt:focus-within { outline: 2px solid var(--acc); outline-offset: 2px; border-radius: 4px }
+.small { font-size: 12px; margin: -4px 2px 8px }
+.print-head { display: none }
+@media (max-width: 420px) { .hint { display: none } .tools { justify-content: space-between } }
+</style>
+
+<!-- Impression : actif seulement pendant printTable() (classe posée sur <html>), donc sans effet sur les autres écrans. -->
+<style>
+@media print {
+  html.printing-calc body * { visibility: hidden }
+  html.printing-calc .calc-print, html.printing-calc .calc-print * { visibility: visible }
+  html.printing-calc .calc-print {
+    position: absolute; left: 0; top: 0; width: 100%;
+    --surface: #fff; --ink: #1C1A17; --muted: #555; --line: #CCC; --acc: #D9480F;
+    --pos: #17803D; --neg: #C2362B; --warn: #B45309;
+    color: var(--ink); background: #fff;
+    -webkit-print-color-adjust: exact; print-color-adjust: exact;
+  }
+  html.printing-calc .calc-print .print-head { display: flex; gap: 12px; align-items: baseline; flex-wrap: wrap; margin-bottom: 6px; font-size: 11px }
+  html.printing-calc .calc-print .print-head b { font-size: 14px }
+  html.printing-calc .calc-print .tbl-wrap { overflow: visible; border: 0; border-radius: 0 }
+  html.printing-calc .calc-print table { font-size: 10px }
+  html.printing-calc .calc-print th, html.printing-calc .calc-print td { padding: 3px 5px; border-bottom: 1px solid var(--line) }
+  html.printing-calc .calc-print tr { break-inside: avoid }
+  html.printing-calc .calc-print .stick { position: static; box-shadow: none }
+}
 </style>

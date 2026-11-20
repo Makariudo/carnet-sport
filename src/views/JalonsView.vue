@@ -5,7 +5,7 @@
  */
 import { computed, ref, watch } from 'vue'
 import { Star } from 'lucide-vue-next'
-import { groupFavorites, metrics } from '../domain/compare'
+import { groupFavorites, metrics, type Metrics } from '../domain/compare'
 import { formatBlock } from '../domain/blocks'
 import { data } from '../stores/sport'
 import { fmtClock, fmtPace } from '../lib/time'
@@ -39,8 +39,26 @@ const compared = computed(() =>
 )
 const structured = computed(() => compared.value.some((c) => c.m.avgRep !== undefined))
 const series = computed(() =>
-  compared.value.filter((c) => c.m.splits?.length).map((c) => ({ label: shortDate(c.s.date), color: c.color, values: c.m.splits! })),
+  compared.value.filter((c) => c.m.splits?.length).map((c) => ({ label: `${shortDate(c.s.date)} · ${c.m.splits!.length} rép.`, color: c.color, values: c.m.splits! })),
 )
+
+/** Nombre de répétitions chronométrées commun à toutes les séances comparées (8 pour un 8×1000 face à un 10×1000). */
+const withSplits = computed(() => compared.value.filter((c) => c.m.splits?.length))
+const lens = computed(() => withSplits.value.map((c) => c.m.splits!.length))
+const common = computed(() => (lens.value.length >= 2 ? Math.min(...lens.value) : 0))
+const unequal = computed(() => common.value > 0 && lens.value.some((l) => l !== common.value))
+const mean = (v: number[]) => v.reduce((a, x) => a + x, 0) / v.length
+
+/** Tableau répétition par répétition : une ligne par rép., la plus rapide en vert. */
+const repRows = computed(() => {
+  const max = Math.max(0, ...lens.value)
+  return Array.from({ length: max }, (_, i) => {
+    const vals = compared.value.map((c) => c.m.splits?.[i])
+    const shown = vals.filter((v): v is number => v !== undefined).map(Math.round)
+    const best = shown.length >= 2 && !shown.every((v) => v === shown[0]) ? Math.min(...shown) : undefined
+    return { n: i + 1, vals, best }
+  })
+})
 /** Meilleure valeur d'une ligne du tableau (la plus petite : temps ou allure). */
 function best(get: (m: (typeof compared.value)[number]['m']) => number | undefined) {
   // Arrondi à la seconde affichée : deux « 3'05 » sont à égalité, et une égalité générale ne met rien en avant.
@@ -52,6 +70,10 @@ const rows = computed(() => {
   const r: { label: string; get: (m: (typeof compared.value)[number]['m']) => number | undefined; fmt: (v: number) => string }[] = structured.value
     ? [
         { label: 'Répétition moyenne', get: (m) => m.avgRep, fmt: fmtClock },
+        // 8 face à 10 répétitions : la moyenne des 8 premières compare à effort égal.
+        ...(unequal.value
+          ? [{ label: `Moyenne des ${common.value} premières`, get: (m: Metrics) => (m.splits ? mean(m.splits.slice(0, common.value)) : undefined), fmt: fmtClock }]
+          : []),
         { label: 'Allure moyenne', get: (m) => m.pace, fmt: fmtPace },
         { label: 'Meilleure répétition', get: (m) => m.best, fmt: fmtClock },
         { label: 'Plus lente', get: (m) => m.worst, fmt: fmtClock },
@@ -99,6 +121,10 @@ const rows = computed(() => {
               <tr><th></th><th v-for="c in compared" :key="c.s.id" :style="{ color: c.color }">{{ shortDate(c.s.date) }}</th></tr>
             </thead>
             <tbody>
+              <tr v-if="structured">
+                <td>Répétitions</td>
+                <td v-for="c in compared" :key="c.s.id">{{ c.s.blocks?.[0]?.reps ?? '–' }}</td>
+              </tr>
               <tr v-for="r in rows" :key="r.label">
                 <td>{{ r.label }}</td>
                 <td v-for="c in compared" :key="c.s.id" :class="{ best: r.best !== undefined && Math.round(r.get(c.m) ?? -1) === r.best }">
@@ -113,7 +139,25 @@ const rows = computed(() => {
           </table>
         </div>
         <SplitsChart v-if="series.length" :series="series" />
-        <p v-else-if="structured" class="note">Saisis les chronos de chaque répétition dans la séance pour voir la courbe répétition par répétition.</p>
+        <template v-if="repRows.length && withSplits.length >= 2">
+          <h3>Répétition par répétition</h3>
+          <div class="tbl-wrap">
+            <table>
+              <thead>
+                <tr><th>Rép.</th><th v-for="c in compared" :key="c.s.id" :style="{ color: c.color }">{{ shortDate(c.s.date) }}</th></tr>
+              </thead>
+              <tbody>
+                <tr v-for="r in repRows" :key="r.n">
+                  <td>{{ r.n }}</td>
+                  <td v-for="(v, i) in r.vals" :key="i" :class="{ best: r.best !== undefined && v !== undefined && Math.round(v) === r.best }">
+                    {{ v !== undefined ? fmtClock(v) : '–' }}
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </template>
+        <p v-if="!series.length && structured" class="note">Saisis les chronos de chaque répétition dans la séance pour voir la courbe répétition par répétition.</p>
       </template>
       <p v-else class="note">Coche au moins deux séances pour les comparer.</p>
     </template>

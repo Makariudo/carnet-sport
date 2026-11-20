@@ -1,0 +1,27 @@
+{
+  "name": "carnet-sport",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vue-tsc -b && vite build",
+    "preview": "vite preview",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.119.1",
+    "lucide-vue-next": "^1.0.0",
+    "vue": "^3.5.13",
+    "vue-router": "^4.6.5"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-vue": "^5.2.3",
+    "@vue/tsconfig": "^0.7.0",
+    "typescript": "~5.8.3",
+    "vite": "^6.3.5",
+    "vite-plugin-pwa": "^2.0.0",
+    "vitest": "^3.2.4",
+    "vue-tsc": "^2.2.8"
+  }
+}

@@ -1,0 +1,19 @@
+# Déploiement Netlify : chaque push sur main part en production, chaque pull request a son aperçu.
+[build]
+  command = "npm run build"
+  publish = "dist"
+
+[build.environment]
+  NODE_VERSION = "22"
+
+# Toutes les routes de l'app renvoient vers index.html (navigation gérée par Vue Router).
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200
+
+# Le service worker doit toujours être revalidé, sinon les mises à jour de l'app tardent à arriver.
+[[headers]]
+  for = "/sw.js"
+  [headers.values]
+    Cache-Control = "no-cache"
